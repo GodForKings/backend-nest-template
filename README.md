@@ -1,191 +1,150 @@
-# backend-nest-template
+# Backend NestJS + Prisma Template (2026)
 
-Стартовый шаблон NestJS-бэкенда с настроенной инфраструктурой, Prisma ORM, JWT-аутентификацией и строгой типизацией ответов API.
-
-## Технологический стек
-
-| Инструмент | Версия | Назначение |
-|---|---|---|
-| NestJS | ^11 | Фреймворк |
-| Prisma | ^7 | ORM + миграции |
-| `@prisma/adapter-pg` | ^7 | Нативный pg-адаптер |
-| `@nestjs/passport` + `passport-jwt` | — | JWT-аутентификация |
-| `class-validator` | ^0.15 | Валидация DTO |
-| `class-transformer` | ^0.5 | Трансформация данных |
+Современный, масштабируемый и готовый к продакшену шаблон бэкенда на **NestJS 11** и **Prisma ORM 7** (PostgreSQL), построенный по строгим стандартам code-style, безопасности и модульной архитектуры.
 
 ---
 
-## Структура проекта
+## 🛠 Технологический стек
 
-```
+- **Фреймворк**: [NestJS 11](https://nestjs.com/) (Express, `@nestjs/swagger`, `@nestjs/throttler`, `@nestjs/serve-static`)
+- **База данных & ORM**: [Prisma ORM 7](https://www.prisma.io/) + `@prisma/adapter-pg` + PostgreSQL 16
+- **Аутентификация**: JWT (Access 2h + Refresh 7d в безопасных HTTP-Only Cookies), Passport.js, `bcrypt`, `argon2`
+- **Валидация & DTO**: `class-validator` + `class-transformer` + Swagger Decorators
+- **Уведомления**: Telegram Bot ([Telegraf](https://telegrafjs.org/)) + Email ([Resend](https://resend.com/))
+- **Безопасность**: Защита от DDoS/Bruteforce (`ThrottlerGuard` + `@Throttle`), `trust proxy`, безопасные `CookieOptions`, защита от IDOR, `enableShutdownHooks`
+- **Контейнеризация**: Изолированный `docker-compose.yml` (PostgreSQL на порту `5437`, приложение на порту `5001`)
+
+---
+
+## 📁 Архитектура проекта
+
+```text
 src/
-├── app.module.ts              # Корневой модуль
-├── main.ts                    # Точка входа (ValidationPipe, глобальный префикс /api)
+├── app.module.ts              # Корневой модуль (Config, ServeStatic, Infra, Common, Api)
+├── main.ts                    # Точка входа (ValidationPipe, trust proxy, CORS, Swagger, cookies, shutdown hooks)
 │
-├── infra/                     # Инфраструктурный слой (@Global)
-│   ├── infra.module.ts        # Реэкспортирует PrismaModule глобально
-│   └── prisma/
-│       ├── prisma.module.ts
-│       └── prisma.service.ts  # PrismaClient + @prisma/adapter-pg + OnModuleInit
+├── infra/                     # Глобальный инфраструктурный слой (@Global)
+│   ├── infra.module.ts        # Реэкспортирует PrismaModule, MailModule, UploadModule, TelegramModule
+│   ├── prisma/                # PrismaClient + OnModuleInit + OnModuleDestroy (Graceful Shutdown)
+│   ├── mail/                  # Почтовый сервис (Resend, шаблоны сброса пароля)
+│   ├── telegram/              # Сервис Telegram-бота (Telegraf, уведомления, экранирование HTML)
+│   └── upload/                # Загрузка и раздача файлов (/uploads/public и /uploads/private)
 │
-├── common/                    # Общие утилиты (@Global)
-│   ├── common.module.ts       # JwtModule (async), PassportModule, JwtStrategy
-│   ├── decorators/
-│   │   ├── authorization.decorator.ts  # @Authorization(...roles?) — JWT + RolesGuard
-│   │   ├── current-user.decorator.ts   # @CurrentUser() — извлечение req.user
-│   │   └── roles.decorator.ts          # @Roles(...roles) — метаданные ролей
-│   ├── guards/
-│   │   ├── jwt.guard.ts       # JwtGuard extends AuthGuard('jwt')
-│   │   └── roles.guard.ts     # RolesGuard — проверка ролей из JWT-payload
-│   ├── interfaces/
-│   │   └── jwt-payload.interface.ts    # { sub, email, role }
-│   └── strategies/
-│       └── jwt.strategy.ts    # PassportStrategy(Strategy) — валидация токена
+├── common/                    # Глобальные утилиты и безопасность (@Global)
+│   ├── common.module.ts       # ThrottlerModule, JwtModule, MaintenanceGuard
+│   ├── config/                # Конфигурации Swagger и CORS
+│   ├── constants/             # Константы пагинации (DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+│   ├── decorators/            # @Authorization(), @CurrentUser(), @Roles(), @DeviceIp()
+│   ├── dto/                   # Базовый PaginationQueryDto
+│   ├── filters/               # Глобальный AllExceptionsFilter
+│   ├── guards/                # JwtGuard, MaintenanceGuard, ThrottlerGuard
+│   ├── interfaces/            # JwtPayload
+│   ├── strategies/            # JwtStrategy
+│   └── utils/                 # slugify, is-dev
 │
-└── api/                       # API-слой
-    ├── api.module.ts
-    └── category/              # Демонстрационный CRUD-модуль
-        ├── category.controller.ts
-        ├── category.service.ts
-        ├── category.module.ts
-        ├── dto/
-        │   ├── create-category.dto.ts
-        │   └── update-category.dto.ts
-        └── interfaces/
-            └── category-response.interface.ts
+└── api/                       # API-модули
+    ├── api.module.ts          # Регистрация всех контроллеров и сервисов
+    ├── auth/                  # Модуль аутентификации (вход, регистрация, сброс пароля, профиль)
+    ├── system-setting/        # Режим тех. работ (MaintenanceGuard) и информационный баннер
+    ├── user/                  # Управление пользователями для админ-панели (бан, роли, пагинация, экспорт)
+    └── category/              # Демонстрационный CRUD-модуль (ЧПУ-поиск, slugify, иерархия)
 ```
 
 ---
 
-## Быстрый старт
+## 💎 Готовые функциональные модули
 
-### 1. Установить зависимости
+### 1. Модуль аутентификации (`api/auth`)
+
+- `POST /api/auth/register` - регистрация нового пользователя (роль `USER`).
+- `POST /api/auth/admin/register` - одноразовая регистрация первого администратора (`ADMIN`).
+- `POST /api/auth/login` - вход в систему с выдачей `accessToken` (2h) и `refreshToken` (7d) в защищенных cookies. Защищен лимитом `@Throttle`.
+- `POST /api/auth/logout` - безопасный выход и отзыв токенов.
+- `POST /api/auth/refresh` - обновление пары токенов.
+- `GET /api/auth/me` - получение профиля текущего пользователя.
+- `PATCH /api/auth/me` - обновление имени, телефона и пароля.
+- `POST /api/auth/forgot-password` - запрос одноразовой ссылки для сброса пароля.
+- `GET /api/auth/reset-password/validate?token=...` - проверка валидности токена сброса.
+- `POST /api/auth/reset-password` - атомарная смена пароля с инвалидацией токена.
+
+### 2. Системные настройки и режим тех. работ (`api/system-setting`)
+
+- `GET /api/system-settings/maintenance` - публичный эндпоинт статуса тех. работ и баннера.
+- `PATCH /api/system-settings/maintenance` - изменение настроек (доступно только `ADMIN`).
+- **In-Memory кэширование**: глобальный `MaintenanceGuard` проверяет состояние сервера за 0 мс без нагрузки на базу данных.
+
+### 3. Управление пользователями (`api/user`)
+
+- `GET /api/users` - список пользователей с поиском и пагинацией (лимит 100).
+- `PATCH /api/users/:id` - блокировка (`isBanned`), изменение роли (`ADMIN`/`USER`).
+- `GET /api/users/export` - экспорт базы пользователей в CSV.
+
+### 4. Хранилище и загрузка файлов (`infra/upload`)
+
+- `POST /api/upload/image` - загрузка публичных изображений с проверкой MIME-типов (раздаются по `/uploads/public/...`).
+- `POST /api/upload/file` - загрузка приватных документов (PDF, ZIP, DOC).
+- `DELETE /api/upload/file` - удаление файлов с диска.
+
+### 5. Telegram-бот (`infra/telegram`)
+
+- `TelegramService` доступен глобально во всех модулях.
+- Метод `sendNotification({ title, message, fields })` для красивых HTML-уведомлений о заказах, заявках и ошибках.
+
+---
+
+## 🚀 Быстрый старт
+
+### 1. Установка зависимостей
 
 ```bash
 npm install
 ```
 
-### 2. Настроить переменные окружения
+### 2. Запуск изолированной базы данных
 
 ```bash
-cp .env.example .env
-# Заполни DATABASE_URL, POSTGRES_URI, JWT_SECRET
+docker compose up -d postgres
 ```
 
-### 3. Сгенерировать Prisma Client
+_(База PostgreSQL запустится на порту `5437`)_
+
+### 3. Настройка переменных окружения
+
+Создайте `.env` файл на основе `.env.example`:
+
+```env
+PORT=5001
+NODE_ENV=development
+
+POSTGRES_USER=template_user
+POSTGRES_PASSWORD=template_pass
+POSTGRES_DB=template_db
+POSTGRES_PORT=5437
+POSTGRES_URI=postgresql://template_user:template_pass@localhost:5437/template_db?schema=public
+
+JWT_ACCESS_SECRET=super-secret-access-dev-key
+JWT_REFRESH_SECRET=super-secret-refresh-dev-key
+
+FRONTEND_URL=http://localhost:3044
+CORS_ORIGINS=http://localhost:3044,http://localhost:3000
+COOKIE_DOMAIN=localhost
+
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+```
+
+### 4. Применение схемы базы данных
 
 ```bash
-npm run generate
-# или: npx prisma generate
+npx prisma db push
+# или: npm run migrate
 ```
 
-### 4. Применить миграции
-
-```bash
-npm run migrate
-# или: npx prisma migrate dev --name init
-```
-
-### 5. Запустить в режиме разработки
+### 5. Запуск в режиме разработки
 
 ```bash
 npm run dev
 ```
 
-Сервер запустится на `http://localhost:5000`. Все маршруты доступны по префиксу `/api`.
-
----
-
-## Переменные окружения
-
-| Переменная | Пример | Описание |
-|---|---|---|
-| `DATABASE_URL` | `postgresql://user:pass@localhost:5432/db` | Для Prisma CLI (migrate, generate) |
-| `POSTGRES_URI` | `postgresql://user:pass@localhost:5432/db` | Для runtime через pg-адаптер |
-| `JWT_SECRET` | `super-secret` | Секрет для подписи JWT |
-| `JWT_EXPIRES_IN` | `7d` | Срок жизни токена |
-| `PORT` | `5000` | Порт сервера |
-
----
-
-## Паттерны шаблона
-
-### Авторизация
-
-```typescript
-// Только JWT (любой аутентифицированный пользователь)
-@Authorization()
-@Get('profile')
-getProfile(@CurrentUser() user: JwtPayload) { ... }
-
-// Только для ADMIN
-@Authorization(Role.ADMIN)
-@Post()
-create(@Body() dto: CreateCategoryDto) { ... }
-
-// ADMIN или USER
-@Authorization(Role.ADMIN, Role.USER)
-@Get('orders')
-getOrders() { ... }
-```
-
-### Строгая типизация ответов
-
-```typescript
-// Интерфейс ответа — только нужные клиенту поля
-export interface CategoryResponse {
-  id: string;
-  name: string;
-  slug: string;
-  image: string | null;
-  isActive: boolean;
-  sortOrder: number;
-  children?: CategoryResponse[];
-}
-
-// Контроллер возвращает строго типизированный ответ
-@Get()
-findAll(): Promise<CategoryListResponse> {
-  return this.categoryService.findAll();
-}
-```
-
-### DTO с валидацией
-
-```typescript
-export class CreateCategoryDto {
-  @IsString() @IsNotEmpty() name!: string;
-  @IsString() @IsNotEmpty() slug!: string;
-  @IsOptional() @IsUrl()    image?: string;
-  @IsOptional() @IsBoolean() isActive?: boolean;
-  @IsOptional() @IsNumber() @Min(0) sortOrder?: number;
-  @IsOptional() @IsString() parentId?: string;
-}
-```
-
----
-
-## Скрипты
-
-```bash
-npm run dev         # Запуск с hot-reload
-npm run build       # Сборка для продакшена
-npm run generate    # npx prisma generate
-npm run migrate     # npx prisma migrate dev
-npm run lint        # ESLint с авто-фиксом
-npm run format      # Prettier
-```
-
----
-
-## Создание нового модуля
-
-При добавлении нового ресурса следуй паттерну модуля `category`:
-
-1. Создай папку `src/api/<resource>/`
-2. Добавь `<resource>.module.ts`, `<resource>.controller.ts`, `<resource>.service.ts`
-3. Создай `dto/create-<resource>.dto.ts` и `dto/update-<resource>.dto.ts`
-4. Создай `interfaces/<resource>-response.interface.ts`
-5. Зарегистрируй модуль в `src/api/api.module.ts`
-
-`PrismaService` доступен глобально через `InfraModule` — импортировать в модуль не нужно.
+Сервер запустится на [http://localhost:5001](http://localhost:5001).
+Интерактивная документация Swagger UI доступна по адресу: **[http://localhost:5001/swagger](http://localhost:5001/swagger)**.

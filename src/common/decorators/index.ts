@@ -1,2 +1,4 @@
-export * from './authorization.decorator';
+export * from './roles.decorator';
 export * from './current-user.decorator';
+export * from './authorization.decorator';
+export * from './device-ip.decorator';

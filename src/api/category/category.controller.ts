@@ -14,8 +14,8 @@ import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CategoryResponseDto } from './dto/category-response.dto';
-import type { CategoryResponse } from './interfaces/category-response.interface';
-import { Authorization } from '../../common/decorators/authorization.decorator';
+import type { CategoryResponse } from './interfaces';
+import { Authorization } from '../../common';
 import { Role } from '@prisma/client';
 
 /**
@@ -30,7 +30,7 @@ export class CategoryController {
 
   /** Публичный список корневых категорий */
   @Get()
-  @ApiOperation({ summary: 'Получить список всех корневых категорий' })
+  @ApiOperation({ summary: 'Получить список всех корневых активных категорий' })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Список категорий успешно получен',
@@ -38,6 +38,51 @@ export class CategoryController {
   })
   findAll(): Promise<CategoryResponse[]> {
     return this.categoryService.findAll();
+  }
+
+  /** Все категории для панели администратора (включая неактивные) */
+  @Authorization(Role.ADMIN)
+  @Get('admin/all')
+  @ApiOperation({
+    summary:
+      'Получить все категории без фильтрации по активности (Доступ: ADMIN)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Все категории успешно получены',
+    type: [CategoryResponseDto],
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Не авторизован',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Недостаточно прав (не ADMIN)',
+  })
+  findAllAdmin(): Promise<CategoryResponse[]> {
+    return this.categoryService.findAllAdmin();
+  }
+
+  /** Публичная категория по ЧПУ slug */
+  @Get('by-slug/:slug')
+  @ApiOperation({ summary: 'Получить категорию по ЧПУ-ссылке (slug)' })
+  @ApiParam({
+    name: 'slug',
+    description: 'ЧПУ-идентификатор категории',
+    example: 'platya-i-sarafany',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Категория успешно найдена',
+    type: CategoryResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Категория не найдена',
+  })
+  findBySlug(@Param('slug') slug: string): Promise<CategoryResponse> {
+    return this.categoryService.findBySlug(slug);
   }
 
   /** Публичная категория по ID */
@@ -70,6 +115,10 @@ export class CategoryController {
     description: 'Некорректные входные данные',
   })
   @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: 'Категория с таким slug уже существует',
+  })
+  @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
     description: 'Не авторизован',
   })
@@ -93,6 +142,10 @@ export class CategoryController {
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Категория не найдена',
+  })
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: 'Категория с таким slug уже существует',
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,

@@ -4,34 +4,64 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
+  Query,
   Req,
   Res,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import type { Request, Response } from 'express';
+import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import type { CookieOptions, Request, Response } from 'express';
+import ms, { type StringValue } from 'ms';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import {
   UserResponseDto,
   LoginResponseDto,
   LogoutResponseDto,
   RefreshResponseDto,
+  ForgotPasswordResponseDto,
+  ResetPasswordResponseDto,
+  ValidateResetTokenResponseDto,
 } from './dto/auth-response.dto';
-import {
-  type JwtPayload,
-  CurrentUser,
-  Authorization,
-  IS_DEV_ENV,
-} from 'src/common';
+import { type JwtPayload, CurrentUser, Authorization } from 'src/common';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
 
+  private getCookieOptions(expiresIn?: string | number): CookieOptions {
+    const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+    const cookieDomain = this.configService.get<string>('COOKIE_DOMAIN');
+
+    let maxAge: number | undefined;
+    if (typeof expiresIn === 'number') {
+      maxAge = expiresIn;
+    } else if (typeof expiresIn === 'string') {
+      maxAge = ms(expiresIn as StringValue);
+    }
+
+    return {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      domain: cookieDomain || undefined,
+      ...(maxAge !== undefined ? { maxAge } : {}),
+    };
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
   @ApiOperation({ summary: 'Регистрация нового пользователя' })
   @ApiResponse({
@@ -67,6 +97,7 @@ export class AuthController {
     return this.authService.registerAdmin(dto);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Авторизация пользователя' })
@@ -90,21 +121,28 @@ export class AuthController {
 
     await this.authService.saveRefreshToken(user.id, refreshToken);
 
-    /* Устанавливаем куку с accessToken (2 часа) */
-    response.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure: IS_DEV_ENV,
-      sameSite: 'lax',
-      maxAge: 2 * 60 * 60 * 1000,
-    });
+    const accessExpires = this.configService.get<string>(
+      'JWT_ACCESS_EXPIRES_IN',
+      '2h',
+    );
+    const refreshExpires = this.configService.get<string>(
+      'JWT_REFRESH_EXPIRES_IN',
+      '7d',
+    );
 
-    /* Устанавливаем куку с refreshToken (7 дней) */
-    response.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: IS_DEV_ENV,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    /* Устанавливаем куку с accessToken */
+    response.cookie(
+      'accessToken',
+      accessToken,
+      this.getCookieOptions(accessExpires),
+    );
+
+    /* Устанавливаем куку с refreshToken */
+    response.cookie(
+      'refreshToken',
+      refreshToken,
+      this.getCookieOptions(refreshExpires),
+    );
 
     const { password: _password, ...userWithoutPassword } = user;
 
@@ -130,16 +168,8 @@ export class AuthController {
       await this.authService.revokeRefreshToken(refreshToken);
     }
 
-    response.clearCookie('accessToken', {
-      httpOnly: true,
-      secure: IS_DEV_ENV,
-      sameSite: 'lax',
-    });
-    response.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: IS_DEV_ENV,
-      sameSite: 'lax',
-    });
+    response.clearCookie('accessToken', this.getCookieOptions());
+    response.clearCookie('refreshToken', this.getCookieOptions());
     return { message: 'Успешный выход' };
   }
 
@@ -166,20 +196,27 @@ export class AuthController {
 
     const tokens = await this.authService.refreshTokens(oldRefreshToken);
 
-    /* Устанавливаем новые куки */
-    response.cookie('accessToken', tokens.accessToken, {
-      httpOnly: true,
-      secure: IS_DEV_ENV,
-      sameSite: 'lax',
-      maxAge: 2 * 60 * 60 * 1000,
-    });
+    const accessExpires = this.configService.get<string>(
+      'JWT_ACCESS_EXPIRES_IN',
+      '2h',
+    );
+    const refreshExpires = this.configService.get<string>(
+      'JWT_REFRESH_EXPIRES_IN',
+      '7d',
+    );
 
-    response.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: IS_DEV_ENV,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    /* Устанавливаем новые куки */
+    response.cookie(
+      'accessToken',
+      tokens.accessToken,
+      this.getCookieOptions(accessExpires),
+    );
+
+    response.cookie(
+      'refreshToken',
+      tokens.refreshToken,
+      this.getCookieOptions(refreshExpires),
+    );
 
     return { success: true };
   }
@@ -198,5 +235,67 @@ export class AuthController {
   })
   async getMe(@CurrentUser() payload: JwtPayload) {
     return this.authService.getMe(payload.sub);
+  }
+
+  @Patch('me')
+  @HttpCode(HttpStatus.OK)
+  @Authorization()
+  @ApiOperation({ summary: 'Обновление профиля текущего пользователя' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Профиль успешно обновлен',
+    type: UserResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Пользователь не авторизован',
+  })
+  async updateMe(
+    @CurrentUser() payload: JwtPayload,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.authService.updateMe(payload.sub, dto);
+  }
+
+  @Throttle({ default: { limit: 2, ttl: 60000 } })
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Запрос ссылки для восстановления пароля' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Инструкция по восстановлению пароля отправлена',
+    type: ForgotPasswordResponseDto,
+  })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Get('reset-password/validate')
+  @ApiOperation({ summary: 'Проверка валидности токена сброса пароля' })
+  @ApiQuery({ name: 'token', description: 'Токен из ссылки сброса пароля' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Результат проверки токена',
+    type: ValidateResetTokenResponseDto,
+  })
+  async validateResetToken(@Query('token') token: string) {
+    return this.authService.validateResetToken(token);
+  }
+
+  @Throttle({ default: { limit: 2, ttl: 60000 } })
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Установка нового пароля по токену сброса' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Пароль успешно изменен',
+    type: ResetPasswordResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Недействительный или просроченный токен',
+  })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 }

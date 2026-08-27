@@ -41,3 +41,21 @@ export class RefreshResponseDto {
   @ApiProperty({ example: true })
   success!: boolean;
 }
+
+export class ForgotPasswordResponseDto {
+  @ApiProperty({
+    example:
+      'Инструкция по восстановлению пароля отправлена на указанный email',
+  })
+  message!: string;
+}
+
+export class ResetPasswordResponseDto {
+  @ApiProperty({ example: 'Пароль успешно изменен' })
+  message!: string;
+}
+
+export class ValidateResetTokenResponseDto {
+  @ApiProperty({ example: true })
+  success!: boolean;
+}

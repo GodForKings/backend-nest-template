@@ -1,19 +1,24 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import bcrypt from 'bcrypt';
-import crypto from 'crypto';
-import { PrismaService } from '../../infra/prisma/prisma.service';
+import { JwtService } from '@nestjs/jwt';
+import { type User, Role, type Prisma } from '@prisma/client';
+import { hash, compare } from 'bcrypt';
+import { createHash, randomBytes } from 'crypto';
+import type { StringValue } from 'ms';
+import { PrismaService } from 'src/infra/prisma/prisma.service';
+import { MailService } from 'src/infra/mail/mail.service';
+import type { JwtPayload } from 'src/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import type { JwtPayload, AuthTokens, GenerateTokensUser } from 'src/common';
-import { Role, User } from '@prisma/client';
-import type { StringValue } from 'ms';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class AuthService {
@@ -21,25 +26,35 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {}
 
-  private async getUserByEmail(email: string): Promise<User | null> {
+  /** Хэширование токена с помощью SHA-256 */
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * Получение пользователя по Email.
+   */
+  async getUserByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { email },
     });
   }
 
   /**
-   * Регистрация нового пользователя
+   * Регистрация нового пользователя.
    */
   async register(dto: RegisterDto): Promise<Omit<User, 'password'>> {
     const existingUser = await this.getUserByEmail(dto.email);
-
     if (existingUser) {
-      throw new ConflictException('Пользователь с таким email уже существует');
+      throw new ConflictException(
+        'Пользователь с таким email уже зарегистрирован',
+      );
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await hash(dto.password, 10);
 
     const user = await this.prisma.user.create({
       data: {
@@ -51,32 +66,32 @@ export class AuthService {
       },
     });
 
-    // Возвращаем пользователя без хэша пароля
-    const { password: _password, ...result } = user;
-    return result;
+    const { password: _password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 
   /**
-   * Регистрация первого администратора
+   * Регистрация первого администратора.
    */
   async registerAdmin(dto: RegisterDto): Promise<Omit<User, 'password'>> {
-    const adminCount = await this.prisma.user.count({
+    const adminExists = await this.prisma.user.findFirst({
       where: { role: Role.ADMIN },
     });
 
-    if (adminCount > 0) {
+    if (adminExists) {
       throw new ForbiddenException(
-        'Регистрация администратора заблокирована, так как администратор уже существует',
+        'Регистрация администратора заблокирована: администратор уже существует',
       );
     }
 
     const existingUser = await this.getUserByEmail(dto.email);
-
     if (existingUser) {
-      throw new ConflictException('Пользователь с таким email уже существует');
+      throw new ConflictException(
+        'Пользователь с таким email уже зарегистрирован',
+      );
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await hash(dto.password, 10);
 
     const user = await this.prisma.user.create({
       data: {
@@ -88,28 +103,26 @@ export class AuthService {
       },
     });
 
-    const { password: _password, ...result } = user;
-    return result;
+    const { password: _password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 
   /**
-   * Валидация пользователя при логине
+   * Валидация учетных данных при логине.
    */
   async validateUser(dto: LoginDto): Promise<User> {
     const user = await this.getUserByEmail(dto.email);
-
     if (!user) {
       throw new UnauthorizedException('Неверный email или пароль');
     }
 
     if (user.isBanned) {
-      throw new UnauthorizedException(
-        'Ваш аккаунт заблокирован администратором',
+      throw new ForbiddenException(
+        'Ваш аккаунт заблокирован. Обратитесь в поддержку.',
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
-
+    const isPasswordValid = await compare(dto.password, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Неверный email или пароль');
     }
@@ -118,16 +131,11 @@ export class AuthService {
   }
 
   /**
-   * Хеширование токена методом SHA-256
+   * Генерация пары JWT токенов (access и refresh).
    */
-  private hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex');
-  }
-
-  /**
-   * Генерация пары токенов (Access & Refresh)
-   */
-  async generateTokens(user: GenerateTokensUser): Promise<AuthTokens> {
+  async generateTokens(
+    user: User,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -158,21 +166,11 @@ export class AuthService {
   }
 
   /**
-   * Сохранение хэша Refresh токена в базу данных
+   * Сохранение хэша Refresh токена в БД.
    */
-  async saveRefreshToken(userId: string, token: string): Promise<void> {
-    const tokenHash = this.hashToken(token);
-
-    const decodedRaw: unknown = this.jwtService.decode(token);
-    const decoded = decodedRaw as { exp?: number } | null;
-    let expiresAt: Date;
-
-    if (decoded && typeof decoded.exp === 'number') {
-      expiresAt = new Date(decoded.exp * 1000);
-    } else {
-      /* Фолбек на 7 дней */
-      expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    }
+  async saveRefreshToken(userId: string, refreshToken: string): Promise<void> {
+    const tokenHash = this.hashToken(refreshToken);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await this.prisma.refreshToken.create({
       data: {
@@ -184,84 +182,190 @@ export class AuthService {
   }
 
   /**
-   * Отзыв Refresh токена (удаление из БД)
+   * Отзыв Refresh токена.
    */
-  async revokeRefreshToken(token: string): Promise<void> {
-    const tokenHash = this.hashToken(token);
-    try {
-      await this.prisma.refreshToken.delete({
+  async revokeRefreshToken(refreshToken: string): Promise<void> {
+    const tokenHash = this.hashToken(refreshToken);
+    await this.prisma.refreshToken
+      .delete({
         where: { tokenHash },
-      });
-    } catch {
-      /* Игнорируем ошибку, если токена уже нет в базе */
-    }
+      })
+      .catch(() => undefined);
   }
 
   /**
-   * Обновление пары токенов по старому Refresh токену (ротация)
+   * Обновление пары токенов по валидному Refresh токену.
    */
-  async refreshTokens(oldRefreshToken: string): Promise<AuthTokens> {
-    let payload: JwtPayload;
+  async refreshTokens(
+    oldRefreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const tokenHash = this.hashToken(oldRefreshToken);
 
-    try {
-      payload = await this.jwtService.verifyAsync<JwtPayload>(oldRefreshToken, {
-        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
-      });
-    } catch {
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+
+    if (!storedToken) {
       throw new UnauthorizedException('Недействительный Refresh токен');
     }
 
-    const tokenHash = this.hashToken(oldRefreshToken);
-    const existingToken = await this.prisma.refreshToken.findUnique({
-      where: { tokenHash },
-    });
-
-    if (!existingToken) {
-      /* ПОПЫТКА ПОВТОРНОГО ИСПОЛЬЗОВАНИЯ (Replay Attack):
-         Токен валиден по подписи, но отсутствует в БД.
-         Значит, он уже был использован ранее (или скомпрометирован).
-         В целях безопасности отзываем ВСЕ сессии пользователя. */
-      await this.prisma.refreshToken.deleteMany({
-        where: { userId: payload.sub },
-      });
-      throw new UnauthorizedException(
-        'Сессия скомпрометирована. Пожалуйста, авторизуйтесь заново',
-      );
+    if (storedToken.expiresAt < new Date()) {
+      await this.prisma.refreshToken.delete({ where: { id: storedToken.id } });
+      throw new UnauthorizedException('Срок действия Refresh токена истек');
     }
 
-    // Удаляем старый токен (ротация)
-    await this.prisma.refreshToken.delete({
-      where: { id: existingToken.id },
-    });
-
-    // Получаем пользователя из БД для актуальных данных роли
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-    });
-
-    if (!user || user.isBanned) {
-      throw new UnauthorizedException(
-        'Пользователь заблокирован или не найден',
-      );
+    if (storedToken.user.isBanned) {
+      throw new ForbiddenException('Аккаунт заблокирован');
     }
 
-    // Генерируем новую пару
-    const tokens = await this.generateTokens(user);
+    /* Удаляем старый токен */
+    await this.prisma.refreshToken.delete({ where: { id: storedToken.id } });
 
-    // Сохраняем новый токен
-    await this.saveRefreshToken(user.id, tokens.refreshToken);
+    /* Генерируем новую пару */
+    const tokens = await this.generateTokens(storedToken.user);
+    await this.saveRefreshToken(storedToken.userId, tokens.refreshToken);
 
     return tokens;
   }
 
   /**
-   * Получение профиля текущего пользователя по его ID
+   * Получение профиля пользователя по ID.
    */
   async getMe(userId: string): Promise<Omit<User, 'password'>> {
-    const user = await this.prisma.user.findUniqueOrThrow({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
-    const { password: _password, ...result } = user;
+
+    if (!user) {
+      throw new UnauthorizedException('Пользователь не найден');
+    }
+
+    const { password: _password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  }
+
+  /**
+   * Обновление профиля текущего пользователя.
+   */
+  async updateMe(
+    userId: string,
+    dto: UpdateProfileDto,
+  ): Promise<Omit<User, 'password'>> {
+    const dataToUpdate: Prisma.UserUpdateInput = { ...dto };
+    let updatedUser: User;
+
+    if (dto.password) {
+      dataToUpdate.password = await hash(dto.password, 10);
+
+      const [user] = await this.prisma.$transaction([
+        this.prisma.user.update({
+          where: { id: userId },
+          data: dataToUpdate,
+        }),
+        this.prisma.refreshToken.deleteMany({
+          where: { userId },
+        }),
+      ]);
+      updatedUser = user;
+    } else {
+      updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: dataToUpdate,
+      });
+    }
+
+    const { password: _password, ...result } = updatedUser;
     return result;
+  }
+
+  /**
+   * Запрос ссылки для восстановления пароля.
+   */
+  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
+    const user = await this.getUserByEmail(dto.email);
+
+    if (user) {
+      /* Удаляем все предыдущие неиспользованные токены сброса */
+      await this.prisma.passwordResetToken.deleteMany({
+        where: { userId: user.id },
+      });
+
+      /* Генерируем сырой криптографический токен */
+      const rawToken = randomBytes(32).toString('hex');
+      const tokenHash = this.hashToken(rawToken);
+
+      /* Сохраняем токен в БД со сроком жизни 1 час */
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      await this.prisma.passwordResetToken.create({
+        data: {
+          token: tokenHash,
+          expiresAt,
+          userId: user.id,
+        },
+      });
+
+      /* Отправляем письмо с сырым токеном */
+      await this.mailService.sendResetPasswordEmail(user.email, rawToken);
+    }
+
+    /* Всегда возвращаем успешный ответ для безопасности */
+    return {
+      message:
+        'Инструкция по восстановлению пароля отправлена на указанный email',
+    };
+  }
+
+  /**
+   * Проверка токена восстановления пароля.
+   */
+  async validateResetToken(token: string): Promise<{ success: boolean }> {
+    const tokenHash = this.hashToken(token);
+
+    const resetToken = await this.prisma.passwordResetToken.findUnique({
+      where: { token: tokenHash },
+    });
+
+    if (!resetToken || resetToken.used || resetToken.expiresAt < new Date()) {
+      return { success: false };
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Установка нового пароля по токену сброса.
+   */
+  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
+    const tokenHash = this.hashToken(dto.token);
+
+    const resetToken = await this.prisma.passwordResetToken.findUnique({
+      where: { token: tokenHash },
+    });
+
+    if (!resetToken || resetToken.used || resetToken.expiresAt < new Date()) {
+      throw new BadRequestException(
+        'Ссылка для сброса пароля недействительна или устарела',
+      );
+    }
+
+    const hashedPassword = await hash(dto.password, 10);
+
+    /* Обновляем пароль пользователя, помечаем токен использованным и отзываем сессии */
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { password: hashedPassword },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { used: true },
+      }),
+      this.prisma.refreshToken.deleteMany({
+        where: { userId: resetToken.userId },
+      }),
+    ]);
+
+    return { message: 'Пароль успешно изменен' };
   }
 }
