@@ -1,0 +1,390 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum OrderStatus {
+  PENDING   // Создан, ожидает оплаты
+  PAID      // Оплачен
+  CANCELLED // Отменён
+  REFUNDED  // Возврат
+}
+
+enum PaymentStatus {
+  PENDING   // Ожидает
+  SUCCEEDED // Успешно
+  CANCELLED // Отменён
+}
+
+// ============================================================
+// User
+// - Роль USER по умолчанию
+// - Админ создаётся через отдельный одноразовый эндпоинт
+// - isBanned — блокировка юзера из админки
+// ============================================================
+
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String  // bcrypt hash
+  name     String?
+  phone    String?
+  role     Role    @default(USER)
+  isBanned Boolean @default(false) @map("is_banned")
+
+  favorites     Favorite[]
+  cartItems     CartItem[]
+  orders        Order[]
+  resetTokens   PasswordResetToken[]
+  refreshTokens RefreshToken[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// ============================================================
+// Category
+// - Один уровень пока, но parentId заложен для вложенности
+// - slug для ЧПУ-ссылок (/catalog/platya-i-sarafany)
+// ============================================================
+
+model Category {
+  id        String  @id @default(uuid())
+  name      String
+  slug      String  @unique
+  image     String? // Путь к обложке категории
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  parentId String? @map("parent_id")
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  products Product[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("categories")
+}
+
+// ============================================================
+// Height & Size — глобальные справочники
+// - Админ создаёт один раз
+// - При создании товара выбирает доступные комбинации
+// ============================================================
+
+model Height {
+  id    String @id @default(uuid())
+  value Int    @unique // 158, 164, 170...
+
+  variants ProductVariant[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("heights")
+}
+
+model Size {
+  id    String @id @default(uuid())
+  value String @unique // "40", "42", "S", "M"...
+
+  variants ProductVariant[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("sizes")
+}
+
+// ============================================================
+// Product — карточка лекала
+// - price = 0.00 → бесплатная выкройка
+// - isNew → секция "Новинки"
+// - isActive → скрыть/показать
+// ============================================================
+
+model Product {
+  id              String  @id @default(uuid())
+  name            String
+  slug            String  @unique
+  description     String? // Описание (rich text)
+  characteristics String? // Характеристики товара
+  price           Decimal @db.Decimal(10, 2) // 0.00 = бесплатно
+  isActive        Boolean @default(true) @map("is_active")
+  isNew           Boolean @default(false) @map("is_new")
+
+  categoryId String @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  images    ProductImage[]
+  variants  ProductVariant[]
+  favorites Favorite[]
+  cartItems CartItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
+// ============================================================
+// ProductImage — массив изображений товара
+// ============================================================
+
+model ProductImage {
+  id        String @id @default(uuid())
+  url       String // Путь к файлу на сервере
+  sortOrder Int    @default(0) @map("sort_order")
+
+  productId String @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
+}
+
+// ============================================================
+// ProductVariant — комбинация Рост × Размер для товара
+// - Уникальная связка product + height + size
+// - Цена берётся из Product (одинаковая для всех вариантов)
+// - Файлы выкроек привязаны к варианту (разные для каждого)
+// ============================================================
+
+model ProductVariant {
+  id String @id @default(uuid())
+
+  productId String @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  heightId String @map("height_id")
+  height   Height @relation(fields: [heightId], references: [id])
+
+  sizeId String @map("size_id")
+  size   Size @relation(fields: [sizeId], references: [id])
+
+  files      PatternFile[]
+  cartItems  CartItem[]
+  favorites  Favorite[]
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([productId, heightId, sizeId])
+  @@map("product_variants")
+}
+
+// ============================================================
+// PatternFile — файл выкройки в конкретном формате
+// - format: строка (не enum) для гибкости
+//   Примеры: "Плоттер 900 см", "Плоттер 600 см", "Принтер А4", "Laser"
+// - filePath: путь на локальной ФС сервера
+// ============================================================
+
+model PatternFile {
+  id       String @id @default(uuid())
+  format   String // "Плоттер 900 см", "Принтер А4", "Laser"
+  fileName String @map("file_name") // Оригинальное имя файла
+  filePath String @map("file_path") // Путь на локальной ФС сервера
+  fileSize Int?   @map("file_size") // Размер в байтах
+
+  variantId String @map("variant_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("pattern_files")
+}
+
+// ============================================================
+// Favorite — избранное пользователя
+// ============================================================
+
+model Favorite {
+  id String @id @default(uuid())
+
+  userId String @map("user_id")
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productId String @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  variantId String? @map("variant_id")
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, productId, variantId])
+  @@map("favorites")
+}
+
+// ============================================================
+// CartItem — позиция в корзине
+// - Без quantity (цифровой товар)
+// - Один вариант = одна позиция
+// ============================================================
+
+model CartItem {
+  id String @id @default(uuid())
+
+  userId String @map("user_id")
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productId String @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  variantId String @map("variant_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, variantId])
+  @@map("cart_items")
+}
+
+// ============================================================
+// PromoCode
+// - Фиксированный процент скидки
+// - Без лимита использований
+// - Деактивация через isActive = false
+// ============================================================
+
+model PromoCode {
+  id              String  @id @default(uuid())
+  code            String  @unique
+  discountPercent Int     @map("discount_percent") // 1–100
+  isActive        Boolean @default(true) @map("is_active")
+
+  orders Order[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("promo_codes")
+}
+
+// ============================================================
+// Order — заказ
+// ============================================================
+
+model Order {
+  id          String      @id @default(uuid())
+  orderNumber String      @unique @map("order_number")              // "471501406"
+  totalAmount Decimal     @db.Decimal(10, 2) @map("total_amount")
+  discount    Decimal     @db.Decimal(10, 2) @default(0)
+  status      OrderStatus @default(PENDING)
+
+  userId String @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  promoCodeId String? @map("promo_code_id")
+  promoCode   PromoCode? @relation(fields: [promoCodeId], references: [id])
+
+  payment Payment?
+  items   OrderItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("orders")
+}
+
+// ============================================================
+// OrderItem — позиция заказа
+// - Снапшоты (productName, heightValue, sizeValue, price)
+//   сохраняют данные на момент покупки
+// - variantId — живая ссылка для скачивания файлов
+// ============================================================
+
+model OrderItem {
+  id String @id @default(uuid())
+
+  // Снапшоты — не ломаются при изменении/удалении товара
+  productName String @map("product_name")
+  heightValue Int @map("height_value")
+  sizeValue   String @map("size_value")
+  price       Decimal @db.Decimal(10, 2)
+
+  orderId String @map("order_id")
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Живая ссылка на вариант для скачивания файлов
+  variantId String? @map("variant_id")
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@map("order_items")
+}
+
+// ============================================================
+// Payment — интеграция ЮKassa
+// ============================================================
+
+model Payment {
+  id              String        @id @default(uuid())
+  externalId      String?       @unique @map("external_id")   // ID платежа в ЮKassa
+  amount          Decimal       @db.Decimal(10, 2)
+  status          PaymentStatus @default(PENDING)
+  confirmationUrl String?       @map("confirmation_url") // URL редиректа на оплату
+  metadata        Json?         // Доп. данные от ЮKassa
+
+  orderId String @unique @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("payments")
+}
+
+// ============================================================
+// PasswordResetToken — токен сброса пароля
+// - Срок действия обычно 1 час
+// - used = true после использования
+// ============================================================
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime @map("expires_at") // +1 час от создания
+  used      Boolean  @default(false)
+
+  userId String @map("user_id")
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("password_reset_tokens")
+}
+
+// ============================================================
+// EmailBroadcast — запись о массовой email-рассылке
+// ============================================================
+
+model EmailBroadcast {
+  id        String @id @default(uuid())
+  subject   String
+  body      String // HTML-контент письма
+  sentCount Int    @default(0) @map("sent_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("email_broadcasts")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique @map("token_hash")
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+}

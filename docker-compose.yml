@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: template_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-template_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-template_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-template_db}
+    volumes:
+      - template_postgres_data:/var/lib/postgresql/data
+    ports:
+      - '${POSTGRES_PORT:-5437}:5432'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-template_user} -d ${POSTGRES_DB:-template_db}',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: template_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-5001}
+      POSTGRES_URI: postgresql://${POSTGRES_USER:-template_user}:${POSTGRES_PASSWORD:-template_pass}@postgres:5432/${POSTGRES_DB:-template_db}?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-2h}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+    ports:
+      - '${PORT:-5001}:5001'
+
+volumes:
+  template_postgres_data:
