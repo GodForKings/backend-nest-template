@@ -1,6 +1,8 @@
 import { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
+import { IS_DEV_ENV, saveSwaggerSpec } from '../utils';
+
 export const getSwaggerConfig = () => {
   return new DocumentBuilder()
     .setTitle('Rest API Template')
@@ -20,6 +22,10 @@ export const setupSwagger = (app: INestApplication) => {
   const config = getSwaggerConfig();
 
   const document = SwaggerModule.createDocument(app, config);
+
+  if (IS_DEV_ENV) {
+    saveSwaggerSpec(document);
+  }
 
   SwaggerModule.setup('/swagger', app, document, {
     jsonDocumentUrl: '/swagger.json',

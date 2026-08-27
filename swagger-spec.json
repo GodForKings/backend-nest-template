@@ -1,0 +1,1493 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/upload/image": {
+      "post": {
+        "operationId": "UploadController_uploadImage",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Изображение успешно загружено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fileName": {
+                      "type": "string",
+                      "example": "photo.jpg"
+                    },
+                    "filePath": {
+                      "type": "string",
+                      "example": "/uploads/public/uuid.jpg"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Файл не прошел валидацию (размер > 10MB или неподдерживаемый формат)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Загрузить изображение в публичное хранилище (Доступ: ADMIN)",
+        "tags": [
+          "Upload"
+        ]
+      }
+    },
+    "/api/upload/file": {
+      "post": {
+        "operationId": "UploadController_uploadFile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Файл успешно загружен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fileName": {
+                      "type": "string",
+                      "example": "document.pdf"
+                    },
+                    "filePath": {
+                      "type": "string",
+                      "example": "/uploads/private/uuid.pdf"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Файл не прошел валидацию (размер > 50MB или неподдерживаемый формат)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Загрузить приватный файл PDF/ZIP/DOC (Доступ: ADMIN)",
+        "tags": [
+          "Upload"
+        ]
+      },
+      "delete": {
+        "operationId": "UploadController_deleteFile",
+        "parameters": [
+          {
+            "name": "filePath",
+            "required": true,
+            "in": "query",
+            "description": "Относительный путь или абсолютный URL файла для удаления",
+            "schema": {
+              "example": "/uploads/public/file.jpg",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Файл успешно удален"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Удалить загруженный файл с диска (Доступ: ADMIN)",
+        "tags": [
+          "Upload"
+        ]
+      }
+    },
+    "/api/system-settings/maintenance": {
+      "get": {
+        "operationId": "SystemSettingController_getMaintenanceStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Настройки успешно получены",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Получить настройки режима тех. работ и информационного баннера",
+        "tags": [
+          "System Settings"
+        ]
+      },
+      "patch": {
+        "operationId": "SystemSettingController_updateMaintenanceStatus",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSystemSettingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Настройки успешно обновлены",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Изменить настройки тех. работ и баннера (Доступ: ADMIN)",
+        "tags": [
+          "System Settings"
+        ]
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "operationId": "CategoryController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Список категорий успешно получен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Получить список всех корневых активных категорий",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "post": {
+        "operationId": "CategoryController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Категория успешно создана",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные входные данные"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Недостаточно прав (не ADMIN)"
+          },
+          "409": {
+            "description": "Категория с таким slug уже существует"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Создать новую категорию (Доступ: ADMIN)",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/categories/admin/all": {
+      "get": {
+        "operationId": "CategoryController_findAllAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Все категории успешно получены",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Недостаточно прав (не ADMIN)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Получить все категории без фильтрации по активности (Доступ: ADMIN)",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/categories/by-slug/{slug}": {
+      "get": {
+        "operationId": "CategoryController_findBySlug",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "description": "ЧПУ-идентификатор категории",
+            "schema": {
+              "example": "platya-i-sarafany",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Категория успешно найдена",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Категория не найдена"
+          }
+        },
+        "summary": "Получить категорию по ЧПУ-ссылке (slug)",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/categories/{id}": {
+      "get": {
+        "operationId": "CategoryController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Уникальный идентификатор категории",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Категория успешно найдена",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Категория не найдена"
+          }
+        },
+        "summary": "Получить категорию по её ID",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "patch": {
+        "operationId": "CategoryController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Уникальный идентификатор категории",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Категория успешно обновлена",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Недостаточно прав (не ADMIN)"
+          },
+          "404": {
+            "description": "Категория не найдена"
+          },
+          "409": {
+            "description": "Категория с таким slug уже существует"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Обновить категорию по ID (Доступ: ADMIN)",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "delete": {
+        "operationId": "CategoryController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Уникальный идентификатор категории",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Категория успешно удалена"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Недостаточно прав (не ADMIN)"
+          },
+          "404": {
+            "description": "Категория не найдена"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Удалить категорию по ID (Доступ: ADMIN)",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Пользователь успешно зарегистрирован",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные данные или email уже занят"
+          }
+        },
+        "summary": "Регистрация нового пользователя",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/admin/register": {
+      "post": {
+        "operationId": "AuthController_registerAdmin",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Администратор успешно зарегистрирован",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные данные или email уже занят"
+          },
+          "403": {
+            "description": "Регистрация заблокирована, так как администратор уже существует"
+          }
+        },
+        "summary": "Регистрация первого администратора",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный вход. Токены сохраняются в HTTP-only cookies \"accessToken\" и \"refreshToken\"",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверные учетные данные"
+          }
+        },
+        "summary": "Авторизация пользователя",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Успешный выход из системы",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Выход из системы (очистка cookie)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Токены успешно обновлены в куках",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Недействительный Refresh токен"
+          }
+        },
+        "summary": "Обновление пары токенов доступа",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "AuthController_getMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Данные текущего авторизованного пользователя",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Пользователь не авторизован"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Получение профиля текущего пользователя",
+        "tags": [
+          "Auth"
+        ]
+      },
+      "patch": {
+        "operationId": "AuthController_updateMe",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Профиль успешно обновлен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Пользователь не авторизован"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Обновление профиля текущего пользователя",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/forgot-password": {
+      "post": {
+        "operationId": "AuthController_forgotPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Инструкция по восстановлению пароля отправлена",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForgotPasswordResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Запрос ссылки для восстановления пароля",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/reset-password/validate": {
+      "get": {
+        "operationId": "AuthController_validateResetToken",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "query",
+            "description": "Токен из ссылки сброса пароля",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Результат проверки токена",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateResetTokenResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Проверка валидности токена сброса пароля",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Пароль успешно изменен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetPasswordResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Недействительный или просроченный токен"
+          }
+        },
+        "summary": "Установка нового пароля по токену сброса",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/users": {
+      "get": {
+        "operationId": "UserController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Номер страницы (начиная с 1)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Количество записей на странице (максимум 100)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Поисковый запрос (по email, имени или телефону)",
+            "schema": {
+              "example": "иван",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список пользователей успешно получен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersPaginationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Получить список всех пользователей с пагинацией и поиском (Доступ: ADMIN)",
+        "tags": [
+          "Users Admin"
+        ]
+      }
+    },
+    "/api/users/export": {
+      "get": {
+        "operationId": "UserController_export",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Файл с пользователями успешно сгенерирован и отправлен"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Экспорт списка всех пользователей в CSV-файл (Доступ: ADMIN)",
+        "tags": [
+          "Users Admin"
+        ]
+      }
+    },
+    "/api/users/{id}": {
+      "patch": {
+        "operationId": "UserController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Уникальный идентификатор пользователя",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserAdminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Данные пользователя успешно обновлены",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdminResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь не найден"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Редактировать данные пользователя (Доступ: ADMIN)",
+        "tags": [
+          "Users Admin"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Rest API Template",
+    "description": "API Documentation",
+    "version": "1.0.0",
+    "contact": {
+      "name": "GodForKings",
+      "url": "https://github.com/GodForKings",
+      "email": "itdextrabusiness@gmail.com"
+    },
+    "license": {
+      "name": "JSON-doc",
+      "url": "/swagger.json"
+    }
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "SystemSettingResponseDto": {
+        "type": "object",
+        "properties": {
+          "maintenanceMode": {
+            "type": "boolean",
+            "description": "Режим технических работ активен",
+            "example": false
+          },
+          "bannerEnabled": {
+            "type": "boolean",
+            "description": "Информационный баннер активен",
+            "example": false
+          },
+          "bannerText": {
+            "type": "string",
+            "description": "Текст баннера",
+            "example": "Уважаемые пользователи, 25 июля сайт будет временно недоступен."
+          },
+          "bannerLink": {
+            "type": "string",
+            "description": "Ссылка на баннере",
+            "example": "https://example.com/maintenance"
+          }
+        },
+        "required": [
+          "maintenanceMode",
+          "bannerEnabled",
+          "bannerText",
+          "bannerLink"
+        ]
+      },
+      "UpdateSystemSettingDto": {
+        "type": "object",
+        "properties": {
+          "maintenanceMode": {
+            "type": "boolean",
+            "description": "Режим технических работ активен",
+            "example": false
+          },
+          "bannerEnabled": {
+            "type": "boolean",
+            "description": "Информационный баннер активен",
+            "example": false
+          },
+          "bannerText": {
+            "type": "string",
+            "description": "Текст баннера",
+            "example": "Уважаемые пользователи, 25 июля сайт будет временно недоступен."
+          },
+          "bannerLink": {
+            "type": "string",
+            "description": "Ссылка на баннере",
+            "example": "https://example.com/maintenance"
+          }
+        }
+      },
+      "CategoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "example": "Платья"
+          },
+          "slug": {
+            "type": "string",
+            "example": "platya"
+          },
+          "image": {
+            "type": "object",
+            "example": "https://example.com/images/platya.jpg",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "sortOrder": {
+            "type": "number",
+            "example": 0
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "isActive",
+          "sortOrder"
+        ]
+      },
+      "CreateCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Название категории",
+            "example": "Платья"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Уникальный слаг (slug) для URL",
+            "example": "platya"
+          },
+          "image": {
+            "type": "string",
+            "description": "Ссылка на изображение категории",
+            "example": "https://example.com/images/platya.jpg"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Статус активности категории",
+            "example": true,
+            "default": true
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Порядок сортировки",
+            "example": 0,
+            "default": 0
+          },
+          "parentId": {
+            "type": "string",
+            "description": "ID родительской категории",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        },
+        "required": [
+          "name",
+          "slug"
+        ]
+      },
+      "UpdateCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Название категории",
+            "example": "Платья"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Уникальный слаг (slug) для URL",
+            "example": "platya"
+          },
+          "image": {
+            "type": "string",
+            "description": "Ссылка на изображение категории",
+            "example": "https://example.com/images/platya.jpg"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Статус активности категории",
+            "example": true,
+            "default": true
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Порядок сортировки",
+            "example": 0,
+            "default": 0
+          },
+          "parentId": {
+            "type": "string",
+            "description": "ID родительской категории",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Электронная почта пользователя",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "Пароль пользователя (минимум 8 символов)",
+            "example": "password123",
+            "minLength": 8
+          },
+          "name": {
+            "type": "string",
+            "description": "Имя пользователя",
+            "example": "Иван Иванов"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Номер телефона",
+            "example": "+79991234567"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "UserResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "name": {
+            "type": "string",
+            "example": "Иван Иванов"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+79991234567"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "USER"
+            ],
+            "example": "USER"
+          },
+          "isBanned": {
+            "type": "boolean",
+            "example": false
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-06-25T05:50:17.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-06-25T05:50:17.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "isBanned",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Электронная почта пользователя",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "Пароль пользователя (минимум 8 символов)",
+            "example": "password123",
+            "minLength": 8
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "LoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserResponseDto"
+          }
+        },
+        "required": [
+          "user"
+        ]
+      },
+      "LogoutResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Успешный выход"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "RefreshResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "UpdateProfileDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Имя пользователя",
+            "example": "Александр"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Телефон пользователя",
+            "example": "+79991234567"
+          },
+          "password": {
+            "type": "string",
+            "description": "Новый пароль",
+            "example": "newStrongPassword123",
+            "minLength": 8
+          }
+        }
+      },
+      "ForgotPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Электронная почта пользователя для отправки ссылки сброса пароля",
+            "example": "user@example.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ForgotPasswordResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Инструкция по восстановлению пароля отправлена на указанный email"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "ValidateResetTokenResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Токен сброса пароля, полученный из письма",
+            "example": "a6b8c9d0..."
+          },
+          "password": {
+            "type": "string",
+            "description": "Новый пароль пользователя (минимум 8 символов)",
+            "example": "newpassword123",
+            "minLength": 8
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ]
+      },
+      "ResetPasswordResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Пароль успешно изменен"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "UserAdminResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "name": {
+            "type": "object",
+            "example": "Иван Иванов"
+          },
+          "phone": {
+            "type": "object",
+            "example": "+79991234567"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "USER"
+            ],
+            "example": "USER"
+          },
+          "isBanned": {
+            "type": "boolean",
+            "example": false
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-06-25T05:50:17.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-06-25T05:50:17.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "isBanned",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UsersPaginationResponseDto": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserAdminResponseDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "limit": {
+            "type": "number",
+            "example": 20
+          },
+          "totalPages": {
+            "type": "number",
+            "example": 3
+          }
+        },
+        "required": [
+          "users",
+          "total",
+          "page",
+          "limit",
+          "totalPages"
+        ]
+      },
+      "UpdateUserAdminDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Имя пользователя",
+            "example": "Иван Иванов"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Телефон пользователя",
+            "example": "+79991234567"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "USER"
+            ],
+            "description": "Роль пользователя",
+            "example": "USER"
+          },
+          "isBanned": {
+            "type": "boolean",
+            "description": "Статус блокировки пользователя",
+            "example": false
+          }
+        }
+      }
+    }
+  }
+}
