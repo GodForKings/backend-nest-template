@@ -7,7 +7,7 @@ import {
 import type { Response } from 'express';
 import { type Prisma, type User } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from 'src/common';
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '../../common';
 import { UserQueryDto } from './dto/user-query.dto';
 import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
 import {

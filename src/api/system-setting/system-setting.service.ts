@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import type { SystemSetting } from '@prisma/client';
-import { PrismaService } from 'src/infra/prisma/prisma.service';
+import { PrismaService } from '../../infra/prisma/prisma.service';
 import { UpdateSystemSettingDto } from './dto/update-system-setting.dto';
 import type { ISystemSetting } from './interfaces/system-setting.interface';
 

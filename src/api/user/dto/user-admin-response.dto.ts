@@ -8,11 +8,15 @@ export class UserAdminResponseDto {
   @ApiProperty({ example: 'user@example.com' })
   email!: string;
 
-  @ApiPropertyOptional({ example: 'Иван Иванов' })
-  name?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Иван Иванов' })
+  name!: string | null;
 
-  @ApiPropertyOptional({ example: '+79991234567' })
-  phone?: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: '+79991234567',
+  })
+  phone!: string | null;
 
   @ApiProperty({ enum: Role, example: Role.USER })
   role!: Role;

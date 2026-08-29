@@ -1043,9 +1043,9 @@
             "example": "platya"
           },
           "image": {
-            "type": "object",
-            "example": "https://example.com/images/platya.jpg",
-            "nullable": true
+            "type": "string",
+            "nullable": true,
+            "example": "https://example.com/images/platya.jpg"
           },
           "isActive": {
             "type": "boolean",
@@ -1085,8 +1085,8 @@
           },
           "image": {
             "type": "string",
-            "description": "Ссылка на изображение категории",
-            "example": "https://example.com/images/platya.jpg"
+            "description": "Путь к изображению или URL категории",
+            "example": "/uploads/public/platya.jpg"
           },
           "isActive": {
             "type": "boolean",
@@ -1126,8 +1126,8 @@
           },
           "image": {
             "type": "string",
-            "description": "Ссылка на изображение категории",
-            "example": "https://example.com/images/platya.jpg"
+            "description": "Путь к изображению или URL категории",
+            "example": "/uploads/public/platya.jpg"
           },
           "isActive": {
             "type": "boolean",
@@ -1386,11 +1386,13 @@
             "example": "user@example.com"
           },
           "name": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "example": "Иван Иванов"
           },
           "phone": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "example": "+79991234567"
           },
           "role": {

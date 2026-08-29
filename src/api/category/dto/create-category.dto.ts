@@ -5,7 +5,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUrl,
   Min,
 } from 'class-validator';
 
@@ -27,11 +26,11 @@ export class CreateCategoryDto {
   slug!: string;
 
   @ApiPropertyOptional({
-    description: 'Ссылка на изображение категории',
-    example: 'https://example.com/images/platya.jpg',
+    description: 'Путь к изображению или URL категории',
+    example: '/uploads/public/platya.jpg',
   })
   @IsOptional()
-  @IsUrl()
+  @IsString()
   image?: string;
 
   @ApiPropertyOptional({

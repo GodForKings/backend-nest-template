@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -7,11 +8,15 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import type { CategoryResponse, CategoryDbModel } from './interfaces';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { UploadService } from '../../infra/upload/upload.service';
 import { slugify } from '../../common';
 
 @Injectable()
 export class CategoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   private toResponse(category: CategoryDbModel): CategoryResponse {
     return {
@@ -116,22 +121,28 @@ export class CategoryService {
   }
 
   /**
-   * Обновление категории с проверкой уникальности slug.
+   * Обновление категории с проверкой уникальности slug и очисткой старых файлов.
    */
   async update(id: string, dto: UpdateCategoryDto): Promise<CategoryResponse> {
-    await this.getById(id);
+    const existing = await this.getById(id);
 
     let targetSlug: string | undefined;
     if (dto.slug) {
       targetSlug = slugify(dto.slug);
-      const existing = await this.prisma.category.findUnique({
+      const existingSlug = await this.prisma.category.findUnique({
         where: { slug: targetSlug },
       });
 
-      if (existing && existing.id !== id) {
+      if (existingSlug && existingSlug.id !== id) {
         throw new ConflictException(
           `Категория с ЧПУ-ссылкой "${targetSlug}" уже существует`,
         );
+      }
+    }
+
+    if (dto.image !== undefined && dto.image !== existing.image) {
+      if (existing.image) {
+        await this.uploadService.deleteFile(existing.image);
       }
     }
 
@@ -148,10 +159,25 @@ export class CategoryService {
   }
 
   /**
-   * Удаление категории по ID.
+   * Удаление категории по ID с очисткой прикрепленного изображения.
    */
   async remove(id: string): Promise<void> {
-    await this.getById(id);
+    const existing = await this.getById(id);
+
+    const hasChildren = await this.prisma.category.count({
+      where: { parentId: id },
+    });
+
+    if (hasChildren > 0) {
+      throw new BadRequestException(
+        'Нельзя удалить категорию, у которой есть подкатегории. Сначала удалите или смените родительскую категорию!',
+      );
+    }
+
     await this.prisma.category.delete({ where: { id } });
+
+    if (existing.image) {
+      await this.uploadService.deleteFile(existing.image);
+    }
   }
 }

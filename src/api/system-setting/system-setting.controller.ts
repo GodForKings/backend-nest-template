@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpStatus, Patch } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { Authorization } from 'src/common';
+import { Authorization } from '../../common';
 import { SystemSettingService } from './system-setting.service';
 import { UpdateSystemSettingDto } from './dto/update-system-setting.dto';
 import { SystemSettingResponseDto } from './dto/system-setting-response.dto';

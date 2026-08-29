@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString } from 'class-validator';
-import { PaginationQueryDto } from 'src/common';
+import { PaginationQueryDto } from '../../../common';
 
 export class UserQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({

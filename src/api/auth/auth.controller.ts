@@ -31,7 +31,7 @@ import {
   ResetPasswordResponseDto,
   ValidateResetTokenResponseDto,
 } from './dto/auth-response.dto';
-import { type JwtPayload, CurrentUser, Authorization } from 'src/common';
+import { type JwtPayload, CurrentUser, Authorization } from '../../common';
 
 @ApiTags('Auth')
 @Controller('auth')

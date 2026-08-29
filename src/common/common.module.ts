@@ -4,7 +4,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { SystemSettingModule } from 'src/api/system-setting/system-setting.module';
+import { SystemSettingModule } from '../api/system-setting/system-setting.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtGuard } from './guards/jwt.guard';
 import { MaintenanceGuard } from './guards/maintenance.guard';

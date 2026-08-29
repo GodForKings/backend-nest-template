@@ -11,8 +11,9 @@ export class CategoryResponseDto {
   slug!: string;
 
   @ApiPropertyOptional({
-    example: 'https://example.com/images/platya.jpg',
+    type: String,
     nullable: true,
+    example: 'https://example.com/images/platya.jpg',
   })
   image!: string | null;
 

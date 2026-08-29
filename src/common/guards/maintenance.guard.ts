@@ -8,8 +8,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Role } from '@prisma/client';
 import type { Request } from 'express';
-import { SystemSettingService } from 'src/api/system-setting/system-setting.service';
-import type { JwtPayload } from 'src/common';
+import { SystemSettingService } from '../../api/system-setting/system-setting.service';
+import type { JwtPayload } from '../interfaces/jwt-payload.interface';
 
 /**
  * Глобальный страж технических работ.
