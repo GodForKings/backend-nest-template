@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { CookieOptions, Request, Response } from 'express';
 import ms, { type StringValue } from 'ms';
 import { AuthService } from './auth.service';
@@ -22,6 +22,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ValidateResetTokenDto } from './dto/validate-reset-token.dto';
 import {
   UserResponseDto,
   LoginResponseDto,
@@ -31,7 +32,21 @@ import {
   ResetPasswordResponseDto,
   ValidateResetTokenResponseDto,
 } from './dto/auth-response.dto';
-import { type JwtPayload, CurrentUser, Authorization } from '../../common';
+import type {
+  ForgotPasswordResponse,
+  LoginResponse,
+  LogoutResponse,
+  RefreshResponse,
+  ResetPasswordResponse,
+  UserResponse,
+  ValidateResetTokenResponse,
+} from './interfaces';
+import {
+  type JwtPayload,
+  CurrentUser,
+  Authorization,
+  type AuthTokens,
+} from '../../common';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -61,6 +76,36 @@ export class AuthController {
     };
   }
 
+  /** Установка авторизационных cookie в response */
+  private setAuthCookies(response: Response, tokens: AuthTokens): void {
+    const accessExpires = this.configService.get<string>(
+      'JWT_ACCESS_EXPIRES_IN',
+      '2h',
+    );
+    const refreshExpires = this.configService.get<string>(
+      'JWT_REFRESH_EXPIRES_IN',
+      '7d',
+    );
+
+    response.cookie(
+      'accessToken',
+      tokens.accessToken,
+      this.getCookieOptions(accessExpires),
+    );
+
+    response.cookie(
+      'refreshToken',
+      tokens.refreshToken,
+      this.getCookieOptions(refreshExpires),
+    );
+  }
+
+  /** Очистка авторизационных cookie */
+  private clearAuthCookies(response: Response): void {
+    response.clearCookie('accessToken', this.getCookieOptions());
+    response.clearCookie('refreshToken', this.getCookieOptions());
+  }
+
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
   @ApiOperation({ summary: 'Регистрация нового пользователя' })
@@ -73,10 +118,11 @@ export class AuthController {
     status: HttpStatus.BAD_REQUEST,
     description: 'Некорректные данные или email уже занят',
   })
-  async register(@Body() dto: RegisterDto) {
+  async register(@Body() dto: RegisterDto): Promise<UserResponse> {
     return this.authService.register(dto);
   }
 
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('admin/register')
   @ApiOperation({ summary: 'Регистрация первого администратора' })
   @ApiResponse({
@@ -93,7 +139,7 @@ export class AuthController {
     status: HttpStatus.BAD_REQUEST,
     description: 'Некорректные данные или email уже занят',
   })
-  async registerAdmin(@Body() dto: RegisterDto) {
+  async registerAdmin(@Body() dto: RegisterDto): Promise<UserResponse> {
     return this.authService.registerAdmin(dto);
   }
 
@@ -114,41 +160,11 @@ export class AuthController {
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) response: Response,
-  ) {
-    const user = await this.authService.validateUser(dto);
-    const { accessToken, refreshToken } =
-      await this.authService.generateTokens(user);
+  ): Promise<LoginResponse> {
+    const { user, tokens } = await this.authService.login(dto);
+    this.setAuthCookies(response, tokens);
 
-    await this.authService.saveRefreshToken(user.id, refreshToken);
-
-    const accessExpires = this.configService.get<string>(
-      'JWT_ACCESS_EXPIRES_IN',
-      '2h',
-    );
-    const refreshExpires = this.configService.get<string>(
-      'JWT_REFRESH_EXPIRES_IN',
-      '7d',
-    );
-
-    /* Устанавливаем куку с accessToken */
-    response.cookie(
-      'accessToken',
-      accessToken,
-      this.getCookieOptions(accessExpires),
-    );
-
-    /* Устанавливаем куку с refreshToken */
-    response.cookie(
-      'refreshToken',
-      refreshToken,
-      this.getCookieOptions(refreshExpires),
-    );
-
-    const { password: _password, ...userWithoutPassword } = user;
-
-    return {
-      user: userWithoutPassword,
-    };
+    return { user };
   }
 
   @Post('logout')
@@ -162,17 +178,17 @@ export class AuthController {
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ) {
+  ): Promise<LogoutResponse> {
     const refreshToken = request.cookies?.['refreshToken'] as unknown;
     if (typeof refreshToken === 'string') {
       await this.authService.revokeRefreshToken(refreshToken);
     }
 
-    response.clearCookie('accessToken', this.getCookieOptions());
-    response.clearCookie('refreshToken', this.getCookieOptions());
+    this.clearAuthCookies(response);
     return { message: 'Успешный выход' };
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Обновление пары токенов доступа' })
@@ -188,35 +204,24 @@ export class AuthController {
   async refresh(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ) {
+  ): Promise<RefreshResponse> {
     const oldRefreshToken = request.cookies?.['refreshToken'] as unknown;
     if (typeof oldRefreshToken !== 'string') {
+      this.clearAuthCookies(response);
       throw new UnauthorizedException('Refresh токен не найден в куках');
     }
 
-    const tokens = await this.authService.refreshTokens(oldRefreshToken);
+    let tokens: AuthTokens;
 
-    const accessExpires = this.configService.get<string>(
-      'JWT_ACCESS_EXPIRES_IN',
-      '2h',
-    );
-    const refreshExpires = this.configService.get<string>(
-      'JWT_REFRESH_EXPIRES_IN',
-      '7d',
-    );
+    try {
+      tokens = await this.authService.refreshTokens(oldRefreshToken);
+    } catch (error) {
+      /* Токен невалиден или истёк - очищаем протухшие куки */
+      this.clearAuthCookies(response);
+      throw error;
+    }
 
-    /* Устанавливаем новые куки */
-    response.cookie(
-      'accessToken',
-      tokens.accessToken,
-      this.getCookieOptions(accessExpires),
-    );
-
-    response.cookie(
-      'refreshToken',
-      tokens.refreshToken,
-      this.getCookieOptions(refreshExpires),
-    );
+    this.setAuthCookies(response, tokens);
 
     return { success: true };
   }
@@ -233,7 +238,7 @@ export class AuthController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'Пользователь не авторизован',
   })
-  async getMe(@CurrentUser() payload: JwtPayload) {
+  async getMe(@CurrentUser() payload: JwtPayload): Promise<UserResponse> {
     return this.authService.getMe(payload.sub);
   }
 
@@ -253,7 +258,7 @@ export class AuthController {
   async updateMe(
     @CurrentUser() payload: JwtPayload,
     @Body() dto: UpdateProfileDto,
-  ) {
+  ): Promise<UserResponse> {
     return this.authService.updateMe(payload.sub, dto);
   }
 
@@ -266,20 +271,24 @@ export class AuthController {
     description: 'Инструкция по восстановлению пароля отправлена',
     type: ForgotPasswordResponseDto,
   })
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<ForgotPasswordResponse> {
     return this.authService.forgotPassword(dto);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Get('reset-password/validate')
   @ApiOperation({ summary: 'Проверка валидности токена сброса пароля' })
-  @ApiQuery({ name: 'token', description: 'Токен из ссылки сброса пароля' })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Результат проверки токена',
     type: ValidateResetTokenResponseDto,
   })
-  async validateResetToken(@Query('token') token: string) {
-    return this.authService.validateResetToken(token);
+  async validateResetToken(
+    @Query() query: ValidateResetTokenDto,
+  ): Promise<ValidateResetTokenResponse> {
+    return this.authService.validateResetToken(query.token);
   }
 
   @Throttle({ default: { limit: 2, ttl: 60000 } })
@@ -295,7 +304,9 @@ export class AuthController {
     status: HttpStatus.BAD_REQUEST,
     description: 'Недействительный или просроченный токен',
   })
-  async resetPassword(@Body() dto: ResetPasswordDto) {
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+  ): Promise<ResetPasswordResponse> {
     return this.authService.resetPassword(dto);
   }
 }
