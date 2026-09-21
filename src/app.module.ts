@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import * as path from 'path';
 import { InfraModule } from './infra/infra.module';
@@ -10,6 +11,9 @@ import { ApiModule } from './api/api.module';
   imports: [
     /* Глобальный модуль конфигурации */
     ConfigModule.forRoot({ isGlobal: true }),
+
+    /* Глобальная шина событий приложения */
+    EventEmitterModule.forRoot(),
 
     /* Модуль раздачи публичной статики */
     ServeStaticModule.forRoot({

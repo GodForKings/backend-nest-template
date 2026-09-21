@@ -4,9 +4,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import type { CategoryResponse, CategoryDbModel } from './interfaces';
+import {
+  CATEGORY_EVENTS,
+  CategoryCreatedEvent,
+  CategoryUpdatedEvent,
+  CategoryRemovedEvent,
+} from './events';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { UploadService } from '../../infra/upload/upload.service';
 import { slugify } from '../../common';
@@ -16,6 +23,7 @@ export class CategoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private toResponse(category: CategoryDbModel): CategoryResponse {
@@ -43,9 +51,7 @@ export class CategoryService {
     return category;
   }
 
-  /**
-   * Получение списка всех активных корневых категорий с их подкатегориями (публично).
-   */
+  /** Получение списка всех активных корневых категорий с их подкатегориями (публично) */
   async findAll(): Promise<CategoryResponse[]> {
     const items = await this.prisma.category.findMany({
       where: { isActive: true, parentId: null },
@@ -56,9 +62,7 @@ export class CategoryService {
     return items.map((c) => this.toResponse(c));
   }
 
-  /**
-   * Получение всех категорий без фильтрации по активности (для панели администратора).
-   */
+  /** Получение всех категорий без фильтрации по активности (для панели администратора). */
   async findAllAdmin(): Promise<CategoryResponse[]> {
     const items = await this.prisma.category.findMany({
       where: { parentId: null },
@@ -117,7 +121,14 @@ export class CategoryService {
       include: { children: true },
     });
 
-    return this.toResponse(category);
+    const result = this.toResponse(category);
+
+    this.eventEmitter.emit(
+      CATEGORY_EVENTS.CREATED,
+      new CategoryCreatedEvent(result.slug, result.isActive),
+    );
+
+    return result;
   }
 
   /**
@@ -155,7 +166,19 @@ export class CategoryService {
       include: { children: true },
     });
 
-    return this.toResponse(category);
+    const result = this.toResponse(category);
+
+    this.eventEmitter.emit(
+      CATEGORY_EVENTS.UPDATED,
+      new CategoryUpdatedEvent(
+        existing.slug,
+        result.slug,
+        existing.isActive,
+        result.isActive,
+      ),
+    );
+
+    return result;
   }
 
   /**
@@ -179,5 +202,10 @@ export class CategoryService {
     if (existing.image) {
       await this.uploadService.deleteFile(existing.image);
     }
+
+    this.eventEmitter.emit(
+      CATEGORY_EVENTS.REMOVED,
+      new CategoryRemovedEvent(existing.slug),
+    );
   }
 }
