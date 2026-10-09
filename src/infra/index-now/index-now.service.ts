@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { isDev } from '../../common';
+import { extractErrorMessage, isDev } from '../../common';
 import type {
   IndexNowConfigStatus,
   IndexNowPayload,
@@ -214,8 +214,7 @@ export class IndexNowService implements OnModuleDestroy {
         return this.sendBatchWithRetry(endpoint, payload, attempt + 1);
       }
 
-      const errorMessage =
-        error instanceof Error ? error.message : 'Сетевой сбой';
+      const errorMessage = extractErrorMessage(error, 'Сетевой сбой');
       return {
         ok: false,
         status: 500,

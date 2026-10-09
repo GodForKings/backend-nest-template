@@ -4,6 +4,7 @@ import { MailModule } from './mail/mail.module';
 import { UploadModule } from './upload/upload.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { IndexNowModule } from './index-now/index-now.module';
+import { LlmModule } from './llm/llm.module';
 
 /**
  * Глобальный инфраструктурный модуль.
@@ -17,6 +18,7 @@ import { IndexNowModule } from './index-now/index-now.module';
     UploadModule,
     TelegramModule,
     IndexNowModule,
+    LlmModule,
   ],
   exports: [
     PrismaModule,
@@ -24,6 +26,7 @@ import { IndexNowModule } from './index-now/index-now.module';
     UploadModule,
     TelegramModule,
     IndexNowModule,
+    LlmModule,
   ],
 })
 export class InfraModule {}

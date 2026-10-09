@@ -24,11 +24,13 @@ src/
 ├── main.ts                    # Точка входа (ValidationPipe, trust proxy, CORS, Swagger, cookies, shutdown hooks)
 │
 ├── infra/                     # Глобальный инфраструктурный слой (@Global)
-│   ├── infra.module.ts        # Реэкспортирует PrismaModule, MailModule, UploadModule, TelegramModule
+│   ├── infra.module.ts        # Реэкспортирует PrismaModule, MailModule, UploadModule, TelegramModule, IndexNowModule, LlmModule
 │   ├── prisma/                # PrismaClient + OnModuleInit + OnModuleDestroy (Graceful Shutdown)
 │   ├── mail/                  # Почтовый сервис (Resend, шаблоны сброса пароля)
 │   ├── telegram/              # Сервис Telegram-бота (Telegraf, уведомления, экранирование HTML)
-│   └── upload/                # Загрузка и раздача файлов (/uploads/public и /uploads/private)
+│   ├── upload/                # Загрузка и раздача файлов (/uploads/public и /uploads/private)
+│   ├── index-now/             # Индексация в Яндекс/Bing (микробатчинг, debounce, retry)
+│   └── llm/                   # Интеграция с LLM (OpenRouter/Cloudflare/OpenAI, ProxyAgent туннелирование, auto-retry 429)
 │
 ├── common/                    # Глобальные утилиты и безопасность (@Global)
 │   ├── common.module.ts       # ThrottlerModule, JwtModule, MaintenanceGuard
@@ -89,6 +91,23 @@ src/
 
 - `TelegramService` доступен глобально во всех модулях.
 - Метод `sendNotification({ title, message, fields })` для красивых HTML-уведомлений о заказах, заявках и ошибках.
+
+### 6. Поисковый шлюз IndexNow (`infra/index-now`)
+
+- `IndexNowService` доступен глобально.
+- Автоматическая буферизация (`enqueueUrls`) с микробатчингом и дебаунсом (склеивает сотни событий создания товаров/страниц в единый запрос до 10 000 URL).
+- Автоматический Retry с задержкой при 429/5xx и таймаутах.
+- `submitUrlsAdmin(urls)` для ручной отправки из админки с валидацией.
+
+### 7. Модуль генеративного ИИ и LLM (`infra/llm`)
+
+- `LlmService` доступен глобально.
+- Поддержка провайдеров **OpenRouter**, **Cloudflare AI Gateway**, **Groq** и **OpenAI**.
+- **Обход региональных блокировок**: поддержка туннелирования через локальный/сетевой Xray / HTTP-прокси (`LLM_PROXY_URL`) с использованием нативного `undici.fetch` и `ProxyAgent`.
+- Умный Retry с бэкоффом при HTTP 429 (`try again in Xs`).
+- Защита бюджета: автоматическое отключение скрытых размышлений у reasoning-моделей (`effort: 'none'`).
+- Чистые HTTP-исключения `BadGatewayException` с извлечением реальной ошибки сервиса без засорения серверных консольных логов.
+
 
 ---
 
